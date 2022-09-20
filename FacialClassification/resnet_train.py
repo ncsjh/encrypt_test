@@ -2,19 +2,12 @@
 import torch
 import torch.nn as nn
 import torch.optim as optim
-
-import torchvision
 from torchvision import datasets, models, transforms
-
-import numpy as np
 import time
-import matplotlib
-import matplotlib.pyplot as plt
 import os
-import shutil
 
 
-device = torch.device("cuda:0") 
+device = torch.device("cuda:0")
 
 # 모델 학습 및 검증에 적합한 형태로 resize, normalize
 
@@ -35,9 +28,9 @@ transforms_test = transforms.Compose([
 
 # TODO 주소 입력하는 부분. 수정해야됨
 HERE=os.path.dirname(os.path.abspath(__file__))
-data_dir = r'C:\Users\user\python\FacialClassification'
-train_datasets = datasets.ImageFolder(os.path.join(data_dir, 'train','resize_600'), transforms_train)
-test_datasets = datasets.ImageFolder(os.path.join(data_dir, 'test'), transforms_test)
+# data_dir = r'C:\Users\user\python\FacialClassification'
+train_datasets = datasets.ImageFolder(os.path.join(HERE, 'train_data'), transforms_train)
+test_datasets = datasets.ImageFolder(os.path.join(HERE, 'val_data'), transforms_test)
 # 여기까지! 수정!!
 
 
@@ -97,8 +90,8 @@ for epoch in range(num_epochs):
     for inputs, labels in train_dataloader:
         inputs = inputs.to(device)
         labels = labels.to(device)
-        
-        # 학습된 데이터 숫자 카운트 
+
+        # 학습된 데이터 숫자 카운트
         trained+=1
         # 학습된 비율을 구하고
         p_rate=round(trained/full_len,4)
@@ -116,7 +109,7 @@ for epoch in range(num_epochs):
         # TODO 딥러닝 모델 학습 과정에서 loss.backward()를 호출하면 각 파라미터들의 gradient값의 변화도가 저장된다고 하는데
         # 좀 말이 좀 애매한것 같으니까 이것도 알아보기
         loss.backward()
-        # loss값을 통해 설정된 학습률 만큼 weights를 수정. 
+        # loss값을 통해 설정된 학습률 만큼 weights를 수정.
         optimizer.step()
 
         # 시간이 얼마나 걸렸는지, 예상시간은 얼마나 되는지 보고싶어서 넣은 코드
@@ -125,17 +118,39 @@ for epoch in range(num_epochs):
 
         # 자꾸 콘솔창에 지저분하게 남아서 없애려고 공백으로 새로고침 한번 해줌
         print('\r', '                                                                                                             ', end='')
-        
+
         print('\r', f'epoch : {epoch} / {num_epochs}, {round(p_rate*100, 2)}% , time_lapse : {time_lapse}, estimated_remain_time : {estimated_remain_time}', end='')
 
         # loss값과 corrects값을 계산
         running_loss += loss.item() * inputs.size(0)
         running_corrects += torch.sum(preds == labels.data)
-        
-        # 한 에포크가 다 돌고 나서 이전보다 정확도가 좋아지면 그 모델 저장. 
+
+        # 한 에포크가 다 돌고 나서 이전보다 정확도가 좋아지면 그 모델 저장.
         # 중간에 학습을 멈추는 경우가 생길 수 있으니까 그때그때 저장 해놓고
         # 그 모델의 state를
         # .model 파일이랑 .pth 두가지로 저장해서 필요할때 써먹자
+
+    model.eval()
+    start_time = time.time()
+
+    with torch.no_grad():
+        running_loss = 0.
+        running_corrects = 0
+
+        for inputs, labels in test_dataloader:
+            inputs = inputs.to(device)
+            labels = labels.to(device)
+
+            outputs = model(inputs)
+            _, preds = torch.max(outputs, 1)
+            loss = criterion(outputs, labels)
+
+            running_loss += loss.item() * inputs.size(0)
+            running_corrects += torch.sum(preds == labels.data)
+
+        epoch_loss = running_loss / len(test_datasets)
+        epoch_acc = running_corrects / len(test_datasets) * 100.
+        print('[Test Phase] Loss: {:.4f} Acc: {:.4f}% Time: {:.4f}s'.format(epoch_loss, epoch_acc, time.time() - start_time))
 
     if best_accuray < running_corrects :
         best_model=model
@@ -146,8 +161,8 @@ for epoch in range(num_epochs):
     epoch_loss = running_loss / len(train_datasets)
     epoch_acc = running_corrects / len(train_datasets) * 100.
     print('#{} Loss: {:.4f} Acc: {:.4f}% Time: {:.4f}s'.format(epoch, epoch_loss, epoch_acc, time.time() - start_time))
-    
-# 모든 에포크가 끝나면 
+
+# 모든 에포크가 끝나면
 print ("The best model has an accuracy of " + str(best_accuray))
 torch.save(best_model.state_dict(), 'best_1.model')
 torch.save(best_model.state_dict(), 'best_model_1.pth')
